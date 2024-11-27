@@ -22,13 +22,20 @@ export function useTypingGame({
   const [streak, setStreak] = useState(0);
   const [totalCharacters, setTotalCharacters] = useState(0);
   const [correctCharacters, setCorrectCharacters] = useState(0);
+  const [incorrectCharacters, setIncorrectCharacters] = useState(0);
+  const [totalKeystrokes, setTotalKeystrokes] = useState(0);
+  const [correctKeystrokes, setCorrectKeystrokes] = useState(0);
+  const [incorrectKeystrokes, setIncorrectKeystrokes] = useState(0);
+  const [wordsTyped, setWordsTyped] = useState(0);
+  const [correctWords, setCorrectWords] = useState(0);
+  const [incorrectWords, setIncorrectWords] = useState(0);
   const [testCount, setTestCount] = useState(0);
   const [unlockedAchievements, setUnlockedAchievements] = useState<Achievement[]>([]);
+  const [testEnded, setTestEnded] = useState(false);
 
   const generateWords = useCallback((count: number = 50) => {
     const wordList = words[language];
     const shuffled = [...wordList].sort(() => Math.random() - 0.5);
-    // If we need more words than available, repeat the list
     const repeatedWords: string[] = [];
     while (repeatedWords.length < count) {
       repeatedWords.push(...shuffled);
@@ -42,18 +49,10 @@ export function useTypingGame({
     }
   }, [currentWords.length, generateWords, minWordsBuffer]);
 
-  const resetTest = useCallback(() => {
-    setCurrentWords(generateWords());
-    setTypedText('');
-    setMistakes({});
-    setTimeLeft(initialTime);
-    setIsActive(false);
-    setWpm(0);
-    setAccuracy(100);
-    setStreak(0);
-    setTotalCharacters(0);
-    setCorrectCharacters(0);
-  }, [generateWords, initialTime]);
+  const calculateAccuracy = useCallback(() => {
+    if (totalCharacters === 0) return 100;
+    return Math.round((correctCharacters / totalCharacters) * 100);
+  }, [totalCharacters, correctCharacters]);
 
   const checkAchievements = useCallback(() => {
     const currentAchievements = allAchievements(wpm, accuracy, streak, mistakes, testCount);
@@ -73,14 +72,52 @@ export function useTypingGame({
     }
   }, [wpm, accuracy, streak, mistakes, testCount, unlockedAchievements]);
 
-  const calculateAccuracy = useCallback(() => {
-    if (totalCharacters === 0) return 100;
-    return Math.round((correctCharacters / totalCharacters) * 100);
-  }, [totalCharacters, correctCharacters]);
+  const endTest = useCallback(() => {
+    setIsActive(false);
+    setTestCount(prev => prev + 1);
+    setTestEnded(true);
+    checkAchievements();
+  }, [checkAchievements]);
+
+  const resetTest = useCallback(() => {
+    setCurrentWords(generateWords());
+    setTypedText('');
+    setMistakes({});
+    setTimeLeft(initialTime);
+    setIsActive(false);
+    setWpm(0);
+    setAccuracy(100);
+    setStreak(0);
+    setTotalCharacters(0);
+    setCorrectCharacters(0);
+    setIncorrectCharacters(0);
+    setTotalKeystrokes(0);
+    setCorrectKeystrokes(0);
+    setIncorrectKeystrokes(0);
+    setWordsTyped(0);
+    setCorrectWords(0);
+    setIncorrectWords(0);
+    setTestEnded(false);
+  }, [generateWords, initialTime]);
 
   const handleTyping = useCallback((e: React.KeyboardEvent) => {
+    if (timeLeft === 0 || testEnded) return;
+
     if (!isActive && timeLeft === initialTime) {
       setIsActive(true);
+    }
+
+    // Update keystroke counts
+    setTotalKeystrokes(prev => prev + 1);
+    const currentWord = currentWords[0];
+    const currentIndex = typedText.length;
+    
+    if (currentWord && currentIndex < currentWord.length) {
+      if (e.key === currentWord[currentIndex]) {
+        setCorrectKeystrokes(prev => prev + 1);
+      } else {
+        setIncorrectKeystrokes(prev => prev + 1);
+      }
     }
 
     if (e.key === ' ') {
@@ -88,21 +125,27 @@ export function useTypingGame({
       const wordToCheck = typedText.trim();
       const correctWord = currentWords[0];
 
-      if (!correctWord) return; // Prevent typing if no words available
+      if (!correctWord) return;
 
+      setWordsTyped(prev => prev + 1);
       setTotalCharacters(prev => prev + correctWord.length);
+      
       let correctCount = 0;
       for (let i = 0; i < correctWord.length; i++) {
         if (wordToCheck[i] === correctWord[i]) {
           correctCount++;
         }
       }
+      
       setCorrectCharacters(prev => prev + correctCount);
+      setIncorrectCharacters(prev => prev + (correctWord.length - correctCount));
 
       if (wordToCheck === correctWord) {
         setStreak(s => s + 1);
+        setCorrectWords(prev => prev + 1);
       } else {
         setStreak(0);
+        setIncorrectWords(prev => prev + 1);
         const newMistakes = { ...mistakes };
         for (let i = 0; i < correctWord.length; i++) {
           if (wordToCheck[i] !== correctWord[i]) {
@@ -119,19 +162,13 @@ export function useTypingGame({
       setAccuracy(calculateAccuracy());
       setTypedText('');
       setCurrentWords(words => words.slice(1));
-      ensureEnoughWords(); // Check if we need more words
+      ensureEnoughWords();
     }
-  }, [isActive, timeLeft, typedText, currentWords, mistakes, initialTime, calculateAccuracy, ensureEnoughWords]);
+  }, [isActive, timeLeft, typedText, currentWords, mistakes, initialTime, calculateAccuracy, ensureEnoughWords, testEnded]);
 
   useEffect(() => {
     resetTest();
   }, [language, resetTest]);
-
-  useEffect(() => {
-    if (isActive) {
-      checkAchievements();
-    }
-  }, [isActive, checkAchievements]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -139,17 +176,16 @@ export function useTypingGame({
       timer = setInterval(() => {
         setTimeLeft(time => {
           if (time <= 1) {
-            setIsActive(false);
-            setTestCount(prev => prev + 1);
+            endTest();
+            return 0;
           }
           return time - 1;
         });
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [isActive, timeLeft]);
+  }, [isActive, timeLeft, endTest]);
 
-  // Ensure we always have enough words
   useEffect(() => {
     ensureEnoughWords();
   }, [ensureEnoughWords]);
@@ -168,6 +204,12 @@ export function useTypingGame({
     streak,
     testCount,
     unlockedAchievements,
+    totalKeystrokes,
+    correctKeystrokes,
+    incorrectKeystrokes,
+    wordsTyped,
+    correctWords,
+    incorrectWords,
     handleTyping,
     resetTest
   };

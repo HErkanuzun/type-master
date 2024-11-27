@@ -8,31 +8,30 @@ interface WordDisplayProps {
 
 export default function WordDisplay({ currentWord, typedText, nextWords }: WordDisplayProps) {
   return (
-    <div className="font-mono text-base sm:text-lg mb-4 min-h-[8rem] flex flex-col">
-      {/* Current word container with fixed height */}
-      <div className="h-8 sm:h-10 flex items-center">
-        <span className="mr-2">
-          {currentWord.split('').map((char, index) => {
-            const typedChar = typedText[index];
-            let className = 'text-white/50'; // Default state
+    <div className="relative h-16 sm:h-20 flex items-center">
+      <div className="absolute inset-0 flex items-center">
+        <div className="w-full overflow-hidden">
+          <div className="whitespace-nowrap font-mono text-base sm:text-lg tracking-wide">
+            <span className="inline-flex">
+              {currentWord.split('').map((char, index) => {
+                const typedChar = typedText[index];
+                let className = 'text-white/50'; // Default state
 
-            if (typedChar !== undefined) {
-              className = typedChar === char ? 'text-blue-400' : 'text-red-400';
-            }
+                if (typedChar !== undefined) {
+                  className = typedChar === char ? 'text-blue-400' : 'text-red-400';
+                }
 
-            return (
-              <span key={index} className={className}>
-                {char}
-              </span>
-            );
-          })}
-        </span>
-      </div>
-
-      {/* Next words container with fixed height and proper overflow handling */}
-      <div className="flex-1 overflow-hidden">
-        <div className="text-white/30 whitespace-pre-wrap break-words leading-relaxed">
-          {nextWords.join(' ')}
+                return (
+                  <span key={index} className={className}>
+                    {char}
+                  </span>
+                );
+              })}
+            </span>
+            <span className="ml-4 text-white/30 inline-block">
+              {nextWords.slice(0, 15).join(' ')}
+            </span>
+          </div>
         </div>
       </div>
     </div>
